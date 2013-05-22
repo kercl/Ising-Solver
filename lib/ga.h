@@ -10,6 +10,7 @@
 #define DEFAULT_POPULATION_SIZE 20
 
 #define EVOLUTION_LIMIT 10
+#define SELECTION_ELITIST_PERCENTAGE 0.2
 
 typedef struct {
 	void *topology;
@@ -18,21 +19,28 @@ typedef struct {
 	int **population_state;
 	float *fitness;
 	
-	int population_sz, individuals;
+	int population_sz, genomes;
 	
 	edge_t *connection_list;
 	unsigned connections;
+	
+	float restrict_selection_percentage;
+	
+	int *state_set;
+	int n_states;
+	
+	float mutation_inhibitor;
 }model_t;
 
-void init_population(model_t *m, int tt, int population_size, int individuals, int *state_set, int states);
-void prebuild_edgelist(model_t *m);
+void init_population(model_t *m, int tt, int population_size, int genomes, int *state_set, int states);
+void precalc_edge_list(model_t *m);
 
 void evolve(model_t *m);
 
 void rate_fitness_ising(model_t *m);
+float energy_ising(model_t *m, int i);
 
-void selection(model_t *m);
-void mix_genomes(model_t *m);
+void breed(model_t *m);
 void mutate(model_t *m);
 
 #endif

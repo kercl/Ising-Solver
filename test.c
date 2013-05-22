@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "lib/vector.h"
 #include "lib/lattice.h"
@@ -60,19 +61,38 @@ void draw_grid(model_t *m, int psel) {
 int main(int argc, char **argv) {
 	printf("Ising solver test application\n");
 	
-	int state_set[] = {-1, 1}, i;
+	int state_set[] = {-1, 1}, i, j, k;
 	
 	srand(time(NULL));
 	
 	model_t m;
-	init_population(&m, MODEL_TYPE_LATTICE, 10, WIDTH*HEIGHT, state_set, 2);
+	init_population(&m, MODEL_TYPE_LATTICE, 20, WIDTH*HEIGHT, state_set, 2);
 	init_lattice(m.topology, LATTICE_SQUARE_GRID, WIDTH, HEIGHT, 1);
+	
+	precalc_edge_list(&m);
 	
 	draw_grid(&m, 0);
 	
-	evolve(&m);
+	m.mutation_inhibitor = -0.5f;
+	m.restrict_selection_percentage = 0.5f;
+	
+	for(j = 0; j < 10000; ++j) {
+		rate_fitness_ising(&m);
+		/*for(i = 0; i < m.population_sz; ++i) {
+			printf("%03d: ", i);
+			for(k = 0; k < m.genomes; ++k)
+				printf("%s", m.population_state[i][k] == -1 ? "-" : "+");
+			printf(" | %f, %f\n", m.fitness[i], energy_ising(&m, i));
+		}
+		printf("\n");*/
+		//getchar();
+		evolve(&m);
+	}
+	draw_grid(&m, 0);
 	for(i = 0; i < m.population_sz; ++i) {
-		printf("Chromosome %d fitness: %f\n", i, m.fitness[i]);
+		for(k = 0; k < m.genomes; ++k)
+			printf("%s", m.population_state[i][k] == -1 ? "-" : "+");
+		printf(" | %f, %f\n", m.fitness[i], energy_ising(&m, i));
 	}
 	
 	return 0;
