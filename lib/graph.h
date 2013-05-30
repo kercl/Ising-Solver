@@ -11,12 +11,17 @@ typedef struct {
 
 typedef struct {
 	unsigned size_adj_list;
-	edge_t *adj_list;
+	unsigned *adj;
+	float *dist;
 } vertex_t;
 
 typedef struct {
 	vertex_t *data;
 	unsigned size;
+	
+	int *last_nn;  // result of the most recent nearest neighbour search
+	float *distance; // the distance to the center of the sphere in the nn search
+	unsigned last_nn_sz, last_nn_buffer_sz;
 } graph_t;
 
 typedef struct {
@@ -24,15 +29,16 @@ typedef struct {
 	int vertex;
 } weighted_vertex_t;
 
-graph_t init_graph(unsigned size);
-void delete_graph(graph_t g);
+void init_graph(graph_t *g, unsigned size);
+void delete_graph(graph_t *g);
 
-weighted_vertex_t* find_nearest_neighbours(graph_t g, int v, unsigned *listsz, float maxdist);
+void graph_nearest_neighbours(graph_t *g, int v, float radius);
 
-void link_edges(graph_t g, int v1, int v2, float dist);
-void unlink_edge(graph_t g, int v);
+void link_edges(graph_t *g, unsigned v1, unsigned v2, float dist);
+void unlink_edge(graph_t *g, unsigned v);
 
+/* some graph generators */
 
-
+void build_square_grid(graph_t *g, int w, int h);
 
 #endif

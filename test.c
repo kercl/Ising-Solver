@@ -5,11 +5,17 @@
 #include "lib/vector.h"
 #include "lib/lattice.h"
 #include "lib/ga.h"
+#include "lib/graph.h"
 
 #define DEFAULT_SPACING 15.0f
 
-#define WIDTH 10
-#define HEIGHT 10
+#define HIGHLIGHT 80
+#define RADIUS 3.0f
+
+#define WIDTH 1000
+#define HEIGHT 1000
+
+#define TYPE 0
 
 void draw_dot(float x, float y, float r, int spin, FILE *fp) {
 	char *col = "black";
@@ -17,6 +23,8 @@ void draw_dot(float x, float y, float r, int spin, FILE *fp) {
 		col = "red";
 	else if(spin == -1)
 		col = "blue";
+	else if(spin == 2)
+		col = "green";
 	fprintf(fp, "<circle cx='%f' cy='%f' r='%f' stroke='%s' stroke-width='1' fill='%s'/>\n", x, y, r, col, col);
 }
 
@@ -31,6 +39,10 @@ float offset(int i, lattice_t *l) {
 		case LATTICE_TRIANGLE_GRID:
 			return (i / l->width) & 1 ? 0 : DEFAULT_SPACING / 2.0f;
 	}
+	return 0;
+}
+
+float offset_graph(int i, int type) {
 	return 0;
 }
 
@@ -54,46 +66,110 @@ void draw_grid(model_t *m, int psel) {
 						  y0 + (l->last_nn[j] / l->width) * DEFAULT_SPACING, fp);
 		}
 	}
+	
+	if(m->topology_type == MODEL_TYPE_GRAPH) {
+		float x0 = 1.0f, y0 = 1.0f;
+		graph_t *l = (graph_t*)m->topology;
+		for(int i = 0; i < WIDTH * HEIGHT; ++i) {
+			draw_dot(x0 + offset_graph(i, TYPE) + (i % WIDTH) * DEFAULT_SPACING, 
+					 y0 + (i / WIDTH) * DEFAULT_SPACING, 0.6, m->population_state[psel][i], fp);
+			graph_nearest_neighbours(l, i, 1.42f);
+			int j;
+			for(j = 0; j < l->last_nn_sz; ++j)
+				draw_line(x0 + offset_graph(i, TYPE) + (i % WIDTH) * DEFAULT_SPACING,
+						  y0 + (i / WIDTH) * DEFAULT_SPACING,
+						  x0 + offset_graph(l->last_nn[j], TYPE) + (l->last_nn[j] % WIDTH) * DEFAULT_SPACING,
+						  y0 + (l->last_nn[j] / WIDTH) * DEFAULT_SPACING, fp);
+		}
+		int j;
+		/*graph_nearest_neighbours(l, HIGHLIGHT, 1);
+
+		int i;
+		for(i = 0; i < l->last_nn_sz; ++i)
+			draw_dot(x0 + offset_graph(l->last_nn[i], TYPE) + (l->last_nn[i] % WIDTH) * DEFAULT_SPACING, 
+					 y0 + (l->last_nn[i] / WIDTH) * DEFAULT_SPACING, 1.0f, 2, fp);*/
+	}
 	fprintf(fp, "</svg>");
 	fclose(fp);
 }
 
-int main(int argc, char **argv) {
-	printf("Ising solver test application\n");
+int test_ga() {
+	printf("Ising solver GA test\n");
 	
 	int state_set[] = {-1, 1}, i, j, k;
 	
 	srand(time(NULL));
 	
 	model_t m;
-	init_population(&m, MODEL_TYPE_LATTICE, 20, WIDTH*HEIGHT, state_set, 2);
-	init_lattice(m.topology, LATTICE_SQUARE_GRID, WIDTH, HEIGHT, 1);
+	init_population(&m, MODEL_TYPE_GRAPH, 10, WIDTH*HEIGHT, state_set, 2);
+	init_graph(m.topology, WIDTH * HEIGHT);
 	
+	build_square_grid(m.topology, WIDTH, HEIGHT);
+	
+	printf("prebuilding edge list\n");
 	precalc_edge_list(&m);
+	printf("simulating...\n");
 	
 	draw_grid(&m, 0);
 	
 	m.mutation_inhibitor = -0.5f;
 	m.restrict_selection_percentage = 0.5f;
+	/*
+	printf("PREBUILD CONNECTION LIST:\n");
+	for(j = 0; j < m.connections; ++j) {
+		printf("%d ---> %d | %f\n", m.connection_list[j].a, m.connection_list[j].b, m.connection_list[j].distance);
+	}*/
 	
 	for(j = 0; j < 10000; ++j) {
-		rate_fitness_ising(&m);
+		//rate_fitness_ising(&m);
 		/*for(i = 0; i < m.population_sz; ++i) {
 			printf("%03d: ", i);
 			for(k = 0; k < m.genomes; ++k)
 				printf("%s", m.population_state[i][k] == -1 ? "-" : "+");
 			printf(" | %f, %f\n", m.fitness[i], energy_ising(&m, i));
 		}
-		printf("\n");*/
-		//getchar();
+		printf("\n");
+		getchar();*/
 		evolve(&m);
 	}
 	draw_grid(&m, 0);
-	for(i = 0; i < m.population_sz; ++i) {
+	/*for(i = 0; i < m.population_sz; ++i) {
 		for(k = 0; k < m.genomes; ++k)
 			printf("%s", m.population_state[i][k] == -1 ? "-" : "+");
 		printf(" | %f, %f\n", m.fitness[i], energy_ising(&m, i));
-	}
+	}*/
 	
 	return 0;
+}
+
+void print_graph_connections(graph_t *g) {
+	int i, j;
+	for(i = 0; i < g->size; ++i) {
+		for(j = 0; j < g->data[i].size_adj_list; ++j)
+			printf("[%3d] ---> [%3d] (d: %f)\n", i, g->data[i].adj[j], g->data[i].dist[j]);
+	}
+}
+
+int test_graph() {
+	printf("Test graph src\n");
+	
+	int state_set[] = {-1, 1}, i, j, k;
+	
+	srand(time(NULL));
+	
+	model_t m;
+	init_population(&m, MODEL_TYPE_GRAPH, 20, WIDTH*HEIGHT, state_set, 2);
+	init_graph(m.topology, WIDTH * HEIGHT);
+	
+	build_square_grid(m.topology, WIDTH, HEIGHT);
+	
+	print_graph_connections(m.topology);
+	
+	draw_grid(&m, 0);
+	
+	return 0;
+}
+
+int main(int argc, char **argv) {
+	return test_ga();
 }

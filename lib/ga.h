@@ -21,6 +21,8 @@ typedef struct {
 	
 	int population_sz, genomes;
 	
+	float radius_of_influence;
+	
 	edge_t *connection_list;
 	unsigned connections;
 	

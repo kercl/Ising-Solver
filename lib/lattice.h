@@ -21,6 +21,7 @@ typedef struct {
 	unsigned defect_list_sz, weights_sz;
 	
 	int *last_nn;
+	float *distance;
 	unsigned last_nn_sz, last_nn_buffer_sz;
 }lattice_t;
 

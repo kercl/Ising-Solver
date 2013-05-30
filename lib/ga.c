@@ -6,7 +6,7 @@
 #include <string.h>
 
 #define MIN(a,b) ( (a)<(b) ? (a) : (b) )
-#define MAX(a,b) ( (a)>(b) ? (a) : (b) )
+#define MAX(a,b) ( (a)>(b) ? (a) c: (b) )
 
 #define ABS(x) ( (x)>0 ? (x) : -(x) )
 #define PARENT(x) ( (x)&1 ? ((x)-1)>>1 : ((x)-2)>>1 )
@@ -20,6 +20,9 @@ void init_population(model_t *m, int tt, int population_size, int genomes, int *
 	switch(tt) {
 		case MODEL_TYPE_LATTICE:
 			m->topology = malloc(sizeof(lattice_t));
+			break;
+		case MODEL_TYPE_GRAPH:
+			m->topology = malloc(sizeof(graph_t));
 			break;
 	}
 	m->population_sz = population_size;
@@ -40,6 +43,8 @@ void init_population(model_t *m, int tt, int population_size, int genomes, int *
 	m->restrict_selection_percentage = 1.0f;
 	m->state_set = state_set;
 	m->n_states = states;
+	
+	m->radius_of_influence = 1.0f;
 }
 
 void die_out(model_t *m) {
@@ -51,7 +56,7 @@ void die_out(model_t *m) {
 
 void precalc_edge_list(model_t *m) {
 	int i, j, k, ea, eb;
-		
+
 	if(m->connection_list != NULL) {
 		free(m->connection_list);
 		m->connection_list = malloc(sizeof(edge_t));
@@ -59,11 +64,41 @@ void precalc_edge_list(model_t *m) {
 	
 	int edges = 0;
 	
-	lattice_t *l = m->topology;
-	
 	if(m->topology_type == MODEL_TYPE_LATTICE) {
+		lattice_t *l = m->topology;
+		
 		for(i = 0; i < m->genomes; ++i) {
 			nearest_neighbours(l, i);
+			
+			for(k = 0; k < l->last_nn_sz; ++k) {
+				if(i < l->last_nn[k]) {
+					ea = i;
+					eb = l->last_nn[k];
+				}else {
+					ea = l->last_nn[k];
+					eb = i;
+				}
+				
+				for(j = 0; j < edges; ++j) {
+					if(m->connection_list[j].a == ea && m->connection_list[j].b == eb)
+						break;
+				}
+				if(j >= edges) {
+					m->connection_list = realloc(m->connection_list, (edges + 1) * sizeof(edge_t));
+					m->connection_list[edges].a = ea;
+					m->connection_list[edges].b = eb;
+					m->connection_list[edges].distance = 1.0f;
+					edges++;
+				}
+			}
+		}
+	}
+	
+	if(m->topology_type == MODEL_TYPE_GRAPH) {
+		graph_t *l = m->topology;
+		
+		for(i = 0; i < m->genomes; ++i) {
+			graph_nearest_neighbours(l, i, m->radius_of_influence);
 			
 			for(k = 0; k < l->last_nn_sz; ++k) {
 				if(i < l->last_nn[k]) {
@@ -155,7 +190,7 @@ void evolve(model_t *m) {
 }
 
 float energy_ising(model_t *m, int i) {
-	float H = 0.0f, J = -1.0f;
+	float H = 0.0f, J = 1.0f;
 	int j;
 	
 	for(j = 0; j < m->connections; ++j)

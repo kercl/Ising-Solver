@@ -1,85 +1,161 @@
 #include "graph.h"
+#include "avl.h"
 
-#define MIN_SEARCH_STACK_SIZE = 3
+#include <stdlib.h>
 
-graph_t* init_graph(unsigned size) {
-	graph_t *ng = (graph_t*)malloc(sizeof(graph_t));
-	ng->data = (vertex_t*)malloc(sizeof(vertex_t*) * size);
+#define MIN_SEARCH_STACK_SIZE 7
+#define AVL_R 2
+#define AVL_L 1
+#define ROTATE_L 1
+#define ROTATE_R 2
+
+#define MAX(a,b) ( (a)>(b) ? (a) : (b) )
+
+void init_graph(graph_t *ng, unsigned size) {
+	ng->data = malloc(sizeof(vertex_t) * size);
 	ng->size = size;
 	int i;
 	
-	for(i = 0; i < nv; ++i) {
-		ng->data[i]->size_adj_list = 0;
-		ng->data[i]->adj_list = NULL;
+	for(i = 0; i < size; ++i) {
+		ng->data[i].size_adj_list = 0;
+		ng->data[i].adj = NULL;
 	}
 	
-	return ng;
+	ng->last_nn = malloc((1 << MIN_SEARCH_STACK_SIZE) * sizeof(int));
+	ng->distance = malloc((1 << MIN_SEARCH_STACK_SIZE) * sizeof(float));
+	ng->last_nn_sz = 0;
+	ng->last_nn_buffer_sz = 1 << MIN_SEARCH_STACK_SIZE;
 }
 
-void delete_graph(graph_t g) {
+void delete_graph(graph_t *g) {
 	int i;
 	
 	for(i = 0; i < g->size; ++i) {
-		if(ng->data[i]->adj_list != NULL)
-			free(ng->data[i]->adj_list);
-	free(ng->data[i]);
+		if(g->data[i].adj != NULL)
+			free(g->data[i].adj);
+	}
+	free(g->data);
 	free(g);
 }
 
-int is_in_stack(weighted_vertex_t *stack, int v) {
+void unwrap_tree(graph_t *g, avl_t *t) {
+	if(!g || !t)
+		return;
+	
+	g->last_nn[g->last_nn_sz] = t->a;
+	g->distance[g->last_nn_sz] = t->dist;
+	g->last_nn_sz++;
+	
+	unwrap_tree(g, t->l);
+	unwrap_tree(g, t->r);
+}
+/*
+void debug_print_buffer(const char* t, weighted_vertex_t *b, int sz) {
 	int i;
-	
-	for(i = 0; stack[i]->vertex >= 0; ++i)
-		if(stack[i] == v)
-			return 1;
-	return 0;
+	printf(t);
+	for(i = 0; i < sz; ++i)
+		printf("%d -- ", b[i].vertex);
+	printf(" | [%d]\n", sz);
 }
 
-void push(weighted_vertex_t **stack, int *stack_sz, int *it, int v, float dist) {
-	if(it == stack_sz - 2) {
-		*stack_sz = *stack_sz << 1;
-		*stack = (weighted_vertex_t*)realloc(*stack, sizeof(weighted_vertex_t) * (*stack_sz));
-	}
+void debug_avl(avl_t *st, int intend, const char *prefix) {
+	if(!st)
+		return;
 	
-	*stack[*it]->vertex = v;
-	*stack[*it]->vertex = dist;
-	*it += 1;
-	*stack[*it]->vertex = -1;
-}
+	int i = 0;
+	for(i = 0; i < intend; ++i)
+		printf("  ");
+	printf("%s[%d, %f]\n", prefix, st->a, st->dist);
+	debug_avl(st->l, intend+1, "l");
+	debug_avl(st->r, intend+1, "r");
+}*/
 
-weighted_vertex_t* find_nearest_neighbours(graph_t g, unsigned v, unsigned *listsz, float maxdist) {
-	int stack_size = 1 << MIN_SEARCH_STACK_SIZE, i, j;
-	weighted_vertex_t *stack = (weighted_vertex_t*)malloc(sizeof(weighted_vertex_t) * (1 << MIN_SEARCH_STACK_SIZE)),
+void graph_nearest_neighbours(graph_t *g, int v, float radius) {
+	avl_t *searchtree = NULL;
+	int newelement;
 	
-	stack[0]->vertex = v;
-	stack[0]->distance = 0.0f;
-	stack[1]->vertex = -1;
-	int it = 0;
+	g->last_nn_sz = 0;
 	
-	for(;;) {
-		int pushed = 0;
-		for(i = 0; i <= it; ++i) {
-			vertex_t *neighbour = g->data[stack[i]];
-			for(j = 0; j < neighbour->size_adj_list; ++j) {
-				float dist = stack[i]->distance + neighbour->adj_list[j]->distance;
-				if(!is_in_stack(stack, neighbour->adj_list[j]->next) && dist < maxdist) {
-					push(&stack, &stack_size, &it, neighbour->adj_list[j]->next, dist);
-					pushed++;
+	weighted_vertex_t *newbuffer = malloc((1 << MIN_SEARCH_STACK_SIZE) * sizeof(weighted_vertex_t)),
+					  *searchbuffer = malloc((1 << MIN_SEARCH_STACK_SIZE) * sizeof(weighted_vertex_t));
+	int size_search = 1, it_n = 0, i, j;
+	
+	searchbuffer[0].vertex = v;
+	
+	while(size_search > 0) {
+		for(i = 0; i < size_search; ++i) {
+			for(j = 0; j < g->data[searchbuffer[i].vertex].size_adj_list; ++j) {
+				if(g->data[searchbuffer[i].vertex].adj[j] == v)
+					continue;
+				newelement = 0;
+				//printf("CHECKING: %d\n", g->data[searchbuffer[i].vertex].adj[j]);
+				if(g->data[searchbuffer[i].vertex].dist[j] + searchbuffer[i].distance <= radius)
+					searchtree = insert(searchtree, g->data[searchbuffer[i].vertex].adj[j],
+													g->data[searchbuffer[i].vertex].dist[j] + searchbuffer[i].distance, 
+													&newelement);
+				
+				//debug_avl(searchtree, 0, "t");
+				
+				if(newelement) {
+					//printf("ADDING: %d\n", g->data[searchbuffer[i].vertex].adj[j]);
+					newbuffer[it_n].vertex = g->data[searchbuffer[i].vertex].adj[j];
+					newbuffer[it_n].distance = g->data[searchbuffer[i].vertex].dist[j] + searchbuffer[i].distance;
+					it_n++;
 				}
 			}
 		}
 		
-		if(!pushed)
-			break;
+		weighted_vertex_t *tmp = newbuffer;
+		newbuffer = searchbuffer;
+		searchbuffer = tmp;
+		
+		size_search = it_n;
+		it_n = 0;
+		//printf("-------------\n");
 	}
 	
-	return realloc(stack, it + 2);
+	unwrap_tree(g, searchtree);
 }
 
-void link_edges(graph_t g, unsigned v1, unsigned v2, float dist) {
-	//g->
-}
-
-void unlink_edge(graph_t g, unsigned v) {
+void link_edge_unidir(graph_t *g, unsigned v1, unsigned v2, float dist) {
+	int i;
 	
+	int updated = 0;
+	for(i = 0; i < g->data[v1].size_adj_list; ++i)
+		if(g->data[v1].adj[i] == v2) {
+			g->data[v1].dist[i] = dist;
+			updated = 1;
+		}
+	if(updated == 0) {
+		g->data[v1].adj = realloc(g->data[v1].adj, (g->data[v1].size_adj_list + 1) * sizeof(unsigned));
+		g->data[v1].dist = realloc(g->data[v1].dist, (g->data[v1].size_adj_list + 1) * sizeof(float));
+		
+		g->data[v1].adj[g->data[v1].size_adj_list] = v2;
+		g->data[v1].dist[g->data[v1].size_adj_list] = dist;
+		g->data[v1].size_adj_list++;
+	}
+}
+
+void link_edges(graph_t *g, unsigned v1, unsigned v2, float dist) {	
+	link_edge_unidir(g, v1, v2, dist);
+	link_edge_unidir(g, v2, v1, dist);
+}
+
+void unlink_edge(graph_t *g, unsigned v) {
+	
+}
+
+void build_square_grid(graph_t *g, int w, int h) {
+	int i;
+	for(i = 0; i < w * h; ++i) {
+		if(i % w + 1 < w) {
+			link_edges(g, i, i+1, 1.0f);
+			/*if(i + w + 1 < w * h)
+				link_edges(g, i, i+w+1, 1.42f);*/
+			/*if(i - w + 1 >= 0)
+				link_edges(g, i, i-w+1, 1.42f);*/
+		}
+		if(i + w < w * h)
+			link_edges(g, i, i+w, 1.0f);
+	}
 }
