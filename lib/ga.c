@@ -1,9 +1,13 @@
 #include "ga.h"
+#include "avl.h"
 
 #include <stdlib.h>
 #include <float.h>
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
+
+#define M_PI 3.14159265358979323846
 
 #define MIN(a,b) ( (a)<(b) ? (a) : (b) )
 #define MAX(a,b) ( (a)>(b) ? (a) c: (b) )
@@ -15,6 +19,36 @@ float random01() {
 	return ((float)(rand() & 0xFFFF) / 65536.0f);
 }
 
+double gaussrand() {
+	static double U, V;
+	static int phase = 0;
+	double Z;
+
+	if(phase == 0) {
+		U = (rand() + 1.) / (RAND_MAX + 2.);
+		V = rand() / (RAND_MAX + 1.);
+		Z = sqrt(-2 * log(U)) * sin(2 * M_PI * V);
+	} else
+		Z = sqrt(-2 * log(U)) * cos(2 * M_PI * V);
+
+	phase = 1 - phase;
+
+	return Z;
+}
+
+/*****************************************************
+ * Initialise new population
+ * m: model data structure holding the informations
+ * tt: type of the topology
+ * 		can be either MODEL_TYPE_LATTICE or
+ * 		MODEL_TYPE_GRAPH
+ * population_size: the number of individuals
+ * genomes: the length of the characteristic 
+ * 			chromosome string
+ * state_set: possible allele states (typically {0,1})
+ * states: number of possible alleles
+ *****************************************************/
+ 
 void init_population(model_t *m, int tt, int population_size, int genomes, int *state_set, int states) {
 	m->topology_type = tt;
 	switch(tt) {
@@ -32,21 +66,54 @@ void init_population(model_t *m, int tt, int population_size, int genomes, int *
 	
 	m->genomes = genomes;
 	m->connection_list = NULL;
+	m->connections = 0;
 	
-	int i, j;
-	for(i = 0; i < population_size; ++i) {
-		m->population_state[i] = malloc(sizeof(int) * genomes);
-		for(j = 0; j < genomes; ++j)
-			m->population_state[i][j] = state_set[rand() % states];
-	}
-	
-	m->restrict_selection_percentage = 1.0f;
 	m->state_set = state_set;
 	m->n_states = states;
 	
+	m->restrict_selection_percentage = 1.0f;
 	m->radius_of_influence = 1.0f;
+	
+	int i;
+	for(i = 0; i < population_size; ++i)
+		m->population_state[i] = malloc(sizeof(int) * m->genomes);
+	
+	randomise_population(m);
 }
 
+/*****************************************************
+ * Initialise the genomes with random values
+ *****************************************************/
+
+void randomise_population(model_t *m) {
+	int i, j;
+	for(i = 0; i < m->population_sz; ++i) {
+		for(j = 0; j < m->genomes; ++j) {
+			m->population_state[i][j] = m->state_set[rand() % m->n_states];
+		}
+	}
+}
+
+/*****************************************************
+ * Free occupied space
+ *****************************************************/
+ 
+void delete_model(model_t *m) {
+	free(m->connection_list);
+	
+	int i;
+	for(i = 0; i < m->population_sz; ++i)
+		free(m->population_state[i]);
+	free(m->population_state);
+	
+	if(m->topology_type == MODEL_TYPE_GRAPH)
+		delete_graph(m->topology);
+}
+
+/*****************************************************
+ * Completely delete a population
+ *****************************************************/
+ 
 void die_out(model_t *m) {
 	int i;
 	for(i = 0; i < m->population_sz; ++i)
@@ -54,15 +121,49 @@ void die_out(model_t *m) {
 	free(m->population_state);
 }
 
+/*****************************************************
+ * Expand the content of an AVL tree, containing
+ * all possible connection information in the 
+ * graph or lattice and store it in the connection
+ * prebuild list (much faster computation time,
+ * but very, very greedy considering memory
+ * usage
+ *****************************************************/
+ 
+void unwrap_connections(model_t *g, avl_t *t) {
+	if(!g || !t)
+		return;
+	
+	g->connection_list[g->connections].a = t->a;
+	g->connection_list[g->connections].b = t->b;
+	g->connection_list[g->connections].distance = t->dist;
+	g->connections++;
+	
+	unwrap_connections(g, t->l);
+	unwrap_connections(g, t->r);
+}
+
+/*****************************************************
+ * Prebuild a list of all possible pairs in a graph
+ * where an interaction can occur
+ * algorithm build an AVL tree (insertation O(log(n)))
+ * instead of O(n), since a connection could be added
+ * twice otherwise (from a to b and b to a)
+ * the tree content can then easily be converted to
+ * an array (unwrap_connections)
+ *****************************************************/
+ 
 void precalc_edge_list(model_t *m) {
 	int i, j, k, ea, eb;
-
+		
 	if(m->connection_list != NULL) {
 		free(m->connection_list);
-		m->connection_list = malloc(sizeof(edge_t));
+		m->connection_list = NULL;
+		m->connections = 0;
 	}
 	
-	int edges = 0;
+	int edges = 0, new;
+	avl_t *stree = NULL;
 	
 	if(m->topology_type == MODEL_TYPE_LATTICE) {
 		lattice_t *l = m->topology;
@@ -79,24 +180,27 @@ void precalc_edge_list(model_t *m) {
 					eb = i;
 				}
 				
-				for(j = 0; j < edges; ++j) {
-					if(m->connection_list[j].a == ea && m->connection_list[j].b == eb)
-						break;
-				}
-				if(j >= edges) {
-					m->connection_list = realloc(m->connection_list, (edges + 1) * sizeof(edge_t));
-					m->connection_list[edges].a = ea;
-					m->connection_list[edges].b = eb;
-					m->connection_list[edges].distance = 1.0f;
+				stree = insert(stree, ea, eb, l->distance[k], &new);
+				if(new)
 					edges++;
-				}
 			}
 		}
+		
+		m->connections = 0;
+		m->connection_list = malloc(edges * sizeof(edge_t));
+		unwrap_connections(m, stree);
+		delete_tree(stree);
 	}
 	
 	if(m->topology_type == MODEL_TYPE_GRAPH) {
+		
 		graph_t *l = m->topology;
 		
+		if(m->connection_list != NULL) {
+			free(m->connection_list);
+			m->connection_list = NULL;
+		}
+			
 		for(i = 0; i < m->genomes; ++i) {
 			graph_nearest_neighbours(l, i, m->radius_of_influence);
 			
@@ -109,24 +213,23 @@ void precalc_edge_list(model_t *m) {
 					eb = i;
 				}
 				
-				for(j = 0; j < edges; ++j) {
-					if(m->connection_list[j].a == ea && m->connection_list[j].b == eb)
-						break;
-				}
-				if(j >= edges) {
-					m->connection_list = realloc(m->connection_list, (edges + 1) * sizeof(edge_t));
-					m->connection_list[edges].a = ea;
-					m->connection_list[edges].b = eb;
-					m->connection_list[edges].distance = 1.0f;
+				stree = insert(stree, ea, eb, l->distance[k], &new);
+				if(new)
 					edges++;
-				}
 			}
 		}
+		
+		m->connections = 0;
+		m->connection_list = malloc(edges * sizeof(edge_t));
+		unwrap_connections(m, stree);
+		delete_tree(stree);
 	}
-	
-	m->connections = edges;
 }
 
+/*****************************************************
+ * Exchanges to populations
+ *****************************************************/
+ 
 void swap_population(model_t *m, int a, int b) {
 	float f = m->fitness[a];
 	m->fitness[a] = m->fitness[b];
@@ -137,6 +240,11 @@ void swap_population(model_t *m, int a, int b) {
 	m->population_state[b] = p;
 }
 
+/*****************************************************
+ * Rearrange populations, such that the list of
+ * populations can be interpreted as a heap
+ *****************************************************/
+ 
 void heapify(model_t *m) {
 	int i;
 	
@@ -152,6 +260,11 @@ void heapify(model_t *m) {
 	}
 }
 
+/*****************************************************
+ * Sort population according to their fitness
+ * Algorithm: Heapsort
+ *****************************************************/
+ 
 void sort_population(model_t *m) {
 	heapify(m);
 	
@@ -180,16 +293,34 @@ void sort_population(model_t *m) {
 	swap_population(m, 0, 1);
 }
 
+/*****************************************************
+ * Breed a new generation
+ *****************************************************/
+ 
 void evolve(model_t *m) {
 	if(m->connection_list == NULL)
 		precalc_edge_list(m);
+	if(m->connection_list == NULL)
+		return;
 	
-	rate_fitness_ising(m);
+	rate_fitness(m);
 	breed(m);
 	mutate(m);
 }
 
-float energy_ising(model_t *m, int i) {
+/*****************************************************
+ * Simple energy in the Ising model:
+ *     ___
+ *    \
+ * H = )   J   S  S
+ * 	  /___  ij  i  j
+ *    <i,j>
+ * 
+ * J   = J constant
+ *  ij
+ *****************************************************/
+ 
+float energy_ising(struct model *m, int i) {
 	float H = 0.0f, J = 1.0f;
 	int j;
 	
@@ -198,7 +329,11 @@ float energy_ising(model_t *m, int i) {
 	return H;
 }
 
-void rate_fitness_ising(model_t *m) {
+/*****************************************************
+ * Rates the fitness of each individual in a population
+ *****************************************************/
+ 
+void rate_fitness(model_t *m) {
 	int i, j;
 	
 	float accum_fitness = 0.0f, minimum = INFINITY;
@@ -222,11 +357,9 @@ void rate_fitness_ising(model_t *m) {
 	sort_population(m);
 }
 
-int* clone_population(model_t *m, int p) {
-	int *tmp = malloc(m->genomes * sizeof(int));
-	memcpy(tmp, m->population_state[p], m->genomes * sizeof(int));
-	return tmp;
-}
+/*****************************************************
+ * Randomly select an individual
+ *****************************************************/
 
 int select_random_individual(model_t *m, float accumfit) {
 	float fit = random01() * accumfit;
@@ -240,6 +373,10 @@ int select_random_individual(model_t *m, float accumfit) {
 	}
 	return 0;
 }
+
+/*****************************************************
+ * Create a new generation (crossover)
+ *****************************************************/
 
 void breed(model_t *m) {
 	int n = (int)(m->population_sz * m->restrict_selection_percentage), i, j, k;
@@ -263,20 +400,30 @@ void breed(model_t *m) {
 	for(i = 0; i < m->population_sz; ++i) {
 		int indiv_a = select_random_individual(m, accum_fitness), 
 			indiv_b = select_random_individual(m, accum_fitness);
-		while(indiv_b == indiv_a)
-			indiv_b = select_random_individual(m, accum_fitness);
+		if(indiv_b == indiv_a) { // cannot select the same individual for breeding, prefer fitter individuals
+			if(indiv_a == 0)
+				indiv_b = 1;
+			else
+				indiv_b--;
+		}
 		
 		int splice_at = rand() % m->genomes;
 
+		// crossover at splice_at
 		new_population[i] = malloc(m->genomes * sizeof(int));
 		memcpy(new_population[i], m->population_state[indiv_a], splice_at * sizeof(int));
 		memcpy(new_population[i] + splice_at, m->population_state[indiv_b] + splice_at, (m->genomes - splice_at) * sizeof(int));
 	}
 	
+	// replace old population
 	die_out(m);
 	m->population_state = new_population;
 }
 
+/*****************************************************
+ * Randomly flip bits in the individual's chromosomes
+ *****************************************************/
+ 
 void mutate(model_t *m) {
 	int i, j;
 	

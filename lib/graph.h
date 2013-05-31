@@ -35,7 +35,6 @@ void delete_graph(graph_t *g);
 void graph_nearest_neighbours(graph_t *g, int v, float radius);
 
 void link_edges(graph_t *g, unsigned v1, unsigned v2, float dist);
-void unlink_edge(graph_t *g, unsigned v);
 
 /* some graph generators */
 

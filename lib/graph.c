@@ -4,10 +4,6 @@
 #include <stdlib.h>
 
 #define MIN_SEARCH_STACK_SIZE 7
-#define AVL_R 2
-#define AVL_L 1
-#define ROTATE_L 1
-#define ROTATE_R 2
 
 #define MAX(a,b) ( (a)>(b) ? (a) : (b) )
 
@@ -49,26 +45,6 @@ void unwrap_tree(graph_t *g, avl_t *t) {
 	unwrap_tree(g, t->l);
 	unwrap_tree(g, t->r);
 }
-/*
-void debug_print_buffer(const char* t, weighted_vertex_t *b, int sz) {
-	int i;
-	printf(t);
-	for(i = 0; i < sz; ++i)
-		printf("%d -- ", b[i].vertex);
-	printf(" | [%d]\n", sz);
-}
-
-void debug_avl(avl_t *st, int intend, const char *prefix) {
-	if(!st)
-		return;
-	
-	int i = 0;
-	for(i = 0; i < intend; ++i)
-		printf("  ");
-	printf("%s[%d, %f]\n", prefix, st->a, st->dist);
-	debug_avl(st->l, intend+1, "l");
-	debug_avl(st->r, intend+1, "r");
-}*/
 
 void graph_nearest_neighbours(graph_t *g, int v, float radius) {
 	avl_t *searchtree = NULL;
@@ -88,16 +64,12 @@ void graph_nearest_neighbours(graph_t *g, int v, float radius) {
 				if(g->data[searchbuffer[i].vertex].adj[j] == v)
 					continue;
 				newelement = 0;
-				//printf("CHECKING: %d\n", g->data[searchbuffer[i].vertex].adj[j]);
+				
 				if(g->data[searchbuffer[i].vertex].dist[j] + searchbuffer[i].distance <= radius)
-					searchtree = insert(searchtree, g->data[searchbuffer[i].vertex].adj[j],
+					searchtree = insert(searchtree, g->data[searchbuffer[i].vertex].adj[j], 0,
 													g->data[searchbuffer[i].vertex].dist[j] + searchbuffer[i].distance, 
 													&newelement);
-				
-				//debug_avl(searchtree, 0, "t");
-				
 				if(newelement) {
-					//printf("ADDING: %d\n", g->data[searchbuffer[i].vertex].adj[j]);
 					newbuffer[it_n].vertex = g->data[searchbuffer[i].vertex].adj[j];
 					newbuffer[it_n].distance = g->data[searchbuffer[i].vertex].dist[j] + searchbuffer[i].distance;
 					it_n++;
@@ -111,10 +83,10 @@ void graph_nearest_neighbours(graph_t *g, int v, float radius) {
 		
 		size_search = it_n;
 		it_n = 0;
-		//printf("-------------\n");
 	}
 	
 	unwrap_tree(g, searchtree);
+	delete_tree(searchtree);
 }
 
 void link_edge_unidir(graph_t *g, unsigned v1, unsigned v2, float dist) {
@@ -141,19 +113,11 @@ void link_edges(graph_t *g, unsigned v1, unsigned v2, float dist) {
 	link_edge_unidir(g, v2, v1, dist);
 }
 
-void unlink_edge(graph_t *g, unsigned v) {
-	
-}
-
 void build_square_grid(graph_t *g, int w, int h) {
 	int i;
 	for(i = 0; i < w * h; ++i) {
 		if(i % w + 1 < w) {
 			link_edges(g, i, i+1, 1.0f);
-			/*if(i + w + 1 < w * h)
-				link_edges(g, i, i+w+1, 1.42f);*/
-			/*if(i - w + 1 >= 0)
-				link_edges(g, i, i-w+1, 1.42f);*/
 		}
 		if(i + w < w * h)
 			link_edges(g, i, i+w, 1.0f);
