@@ -313,7 +313,7 @@ void evolve(model_t *m) {
  *     ___
  *    \
  * H = )   J   S  S
- * 	  /___  ij  i  j
+ *    /___  ij  i  j
  *    <i,j>
  * 
  * J   = J constant
