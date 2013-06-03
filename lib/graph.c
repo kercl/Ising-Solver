@@ -123,3 +123,48 @@ void build_square_grid(graph_t *g, int w, int h) {
 			link_edges(g, i, i+w, 1.0f);
 	}
 }
+
+void build_triangle_grid(graph_t *g, int w, int h) {
+	int i;
+	for(i = 0; i < w * h; ++i) {
+		if(i % w + 1 < w) {
+			link_edges(g, i, i+1, 1.0f);
+		}
+		if(i + w < w * h) {
+			link_edges(g, i, i+w, 1.0f);
+
+			if((i / w) & 1) {
+				if(i % w + 1 < w)
+					link_edges(g, i, i+w+1, 1.0f);
+			}else {
+				if(i % w - 1 >= 0)
+					link_edges(g, i, i+w-1, 1.0f);
+			}
+		}
+	}
+}
+
+void build_diamond_grid(graph_t *g, int w, int h) {
+	int i;
+	
+	for(i = 0; i < w * h; ++i) {
+		if((i / w) & 1) { // odd row
+			if( ((i % w) & 1) == 0 && (i % w) > 0) {
+				link_edges(g, i, i-1, 1.0f);
+			}
+		}else { // even row
+			if( ((i % w) & 1) == 0 ) { // x component
+				if(i + w < w * h) {
+					link_edges(g, i, i+w, 1.0f);
+					if(i % w + 1 < w)
+						link_edges(g, i, i+w+1, 1.0f);
+				}
+				if(i - w >= 0) {
+					link_edges(g, i, i-w, 1.0f);
+					if(i % w + 1 < w)
+						link_edges(g, i, i-w+1, 1.0f);
+				}
+			} // otherwise, leave unconnected
+		}
+	}
+}

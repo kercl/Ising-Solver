@@ -53,6 +53,6 @@ void sort_population(model_t *m);
 
 void delete_model(model_t *m);
 
-float brute_force_max_energy(model_t *m);
+void minimal_energies(model_t *template, int ***min_configs, int *n);
 
 #endif

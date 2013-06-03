@@ -39,5 +39,7 @@ void link_edges(graph_t *g, unsigned v1, unsigned v2, float dist);
 /* some graph generators */
 
 void build_square_grid(graph_t *g, int w, int h);
+void build_triangle_grid(graph_t *g, int w, int h);
+void build_diamond_grid(graph_t *g, int w, int h);
 
 #endif

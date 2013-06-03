@@ -40,11 +40,11 @@ float offset(int i, lattice_t *l) {
 		case LATTICE_TRIANGLE_GRID:
 			return (i / l->width) & 1 ? 0 : DEFAULT_SPACING / 2.0f;
 	}
-	return 0;
+	return 0.0f;
 }
 
 float offset_graph(int i, int type) {
-	return 0;
+	return (i / WIDTH) & 1 ? 0 : DEFAULT_SPACING / 2.0f;
 }
 
 void draw_grid(model_t *m, int psel) {
@@ -56,9 +56,13 @@ void draw_grid(model_t *m, int psel) {
 		float x0 = 1.0f, y0 = 1.0f;
 		lattice_t *l = (lattice_t*)m->topology;
 		for(int i = 0; i < l->width * l->height; ++i) {
+			nearest_neighbours(l, i);
+			
+			if(l->last_nn_sz == 0)
+				continue;
+			
 			draw_dot(x0 + offset(i, l) + (i % l->width) * DEFAULT_SPACING, 
 					 y0 + (i / l->width) * DEFAULT_SPACING, 0.6, m->population_state[psel][i], fp);
-			nearest_neighbours(l, i);
 			int j;
 			for(j = 0; j < l->last_nn_sz; ++j)
 				draw_line(x0 + offset(i, l) + (i % l->width) * DEFAULT_SPACING,
@@ -72,9 +76,14 @@ void draw_grid(model_t *m, int psel) {
 		float x0 = 1.0f, y0 = 1.0f;
 		graph_t *l = (graph_t*)m->topology;
 		for(int i = 0; i < WIDTH * HEIGHT; ++i) {
+			graph_nearest_neighbours(l, i, 1.42f);
+			
+			if(l->last_nn_sz == 0)
+				continue;
+			
 			draw_dot(x0 + offset_graph(i, TYPE) + (i % WIDTH) * DEFAULT_SPACING, 
 					 y0 + (i / WIDTH) * DEFAULT_SPACING, 0.6, m->population_state[psel][i], fp);
-			graph_nearest_neighbours(l, i, 1.42f);
+
 			int j;
 			for(j = 0; j < l->last_nn_sz; ++j)
 				draw_line(x0 + offset_graph(i, TYPE) + (i % WIDTH) * DEFAULT_SPACING,
@@ -94,15 +103,6 @@ void draw_grid(model_t *m, int psel) {
 	fclose(fp);
 }
 
-float energy_ising(model_t *m, int i) {
-	float H = 0.0f, J = 1.0f;
-	int j;
-	
-	for(j = 0; j < m->connections; ++j)
-		H += J * m->population_state[i][m->connection_list[j].a] * m->population_state[i][m->connection_list[j].b];
-	return H;
-}
-
 int test_ga() {
 	printf("Ising solver GA test\n");
 	
@@ -115,15 +115,13 @@ int test_ga() {
 	init_population(&m, MODEL_TYPE_GRAPH, 20, WIDTH*HEIGHT, state_set, 2);
 	init_graph(m.topology, WIDTH * HEIGHT);
 	
-	build_square_grid(m.topology, WIDTH, HEIGHT);
+	build_triangle_grid(&m, WIDTH, HEIGHT);
 	
 	print_graph_connections(m.topology);
 	
 	draw_grid(&m, 0);
 	
-	
-	
-	printf("prebuilding edge list\n");
+	printf("prebuilding edge list (press key to continue)\n");
 	int t = clock();
 	getchar();
 	precalc_edge_list(&m);
@@ -184,18 +182,26 @@ int test_graph() {
 	srand(time(NULL));
 	
 	model_t m;
-	init_population(&m, MODEL_TYPE_GRAPH, 20, WIDTH*HEIGHT, state_set, 2);
+	init_population(&m, MODEL_TYPE_GRAPH, 200, WIDTH*HEIGHT, state_set, 2);
 	init_graph(m.topology, WIDTH * HEIGHT);
 	
-	build_square_grid(m.topology, WIDTH, HEIGHT);
+	printf("building graph");
+	build_diamond_grid(m.topology, WIDTH, HEIGHT);
 	
-	print_graph_connections(m.topology);
+	//print_graph_connections(m.topology);
 	
 	draw_grid(&m, 0);
+
+	printf("pk\n");
+	getchar();
+
+	minimal_energies(&m, NULL, NULL);
+
+	getchar();
+	printf("GENETIC PART\n");
 	
-	m.mutation_inhibitor = -0.2f;
+	m.mutation_inhibitor = -0.1f;
 	m.restrict_selection_percentage = 0.2f;
-	m.energy_fct = &energy_ising;
 	
 	precalc_edge_list(&m);
 	for(i = 0; i < 5000; ++i)

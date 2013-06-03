@@ -433,3 +433,58 @@ void mutate(model_t *m) {
 				m->population_state[i][j] = m->state_set[rand() % m->n_states];
 		}
 }
+
+/*****************************************************
+ * Find minimal enery configurations by bruteforce
+ *****************************************************/
+ 
+void nth_state_to_model(model_t *m, uint8_t *nstate) {  /* currently only 2-state models !!! */
+	int allele = 0;
+	
+	while(allele < m->genomes) {
+		m->population_state[0][allele] = m->state_set[nstate[allele]];
+		allele++;
+	}
+}
+
+void inc_state(model_t *m, uint8_t *state) {
+	int i = 0, carry = 1;
+	while(carry) {
+		state[i]++;
+		carry = state[i] >= m->n_states;
+		state[i] = state[i] % m->n_states;
+		i++;
+	}
+}
+
+int finished(model_t *m) {
+	int i;
+	for(i = 0; i < m->genomes; ++i)
+		if(m->population_state[0][i] != m->state_set[m->n_states - 1])
+			return 0;
+	return 1;
+}
+
+void minimal_energies(model_t *template, int ***min_configs, int *n) {
+	model_t m;
+	init_population(&m, template->topology_type, 1, template->genomes, template->state_set, template->n_states);
+	
+	m.topology = template->topology;
+	
+	precalc_edge_list(&m);
+	
+	float running_max = INFINITY;
+	
+	uint8_t *state = malloc(template->genomes + 1);
+	
+	memset(state, 0, template->genomes * template->n_states);
+	
+	int k;
+	while(!finished(&m)) {
+		nth_state_to_model(&m, state);
+		/*for(k = 0; k < m.genomes; ++k)
+			printf("%s", m.population_state[0][k] == -1 ? "-" : "+");
+		printf(" | %f\r", energy_ising(&m, 0));*/
+		inc_state(&m, state);
+	}
+}
