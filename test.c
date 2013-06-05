@@ -115,7 +115,7 @@ int test_ga() {
 	init_population(&m, MODEL_TYPE_GRAPH, 20, WIDTH*HEIGHT, state_set, 2);
 	init_graph(m.topology, WIDTH * HEIGHT);
 	
-	build_triangle_grid(&m, WIDTH, HEIGHT);
+	build_triangle_grid(m.topology, WIDTH, HEIGHT);
 	
 	print_graph_connections(m.topology);
 	

@@ -31,7 +31,6 @@ void delete_graph(graph_t *g) {
 			free(g->data[i].adj);
 	}
 	free(g->data);
-	free(g);
 }
 
 void unwrap_tree(graph_t *g, avl_t *t) {

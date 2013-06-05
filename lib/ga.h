@@ -16,6 +16,8 @@ struct model {
 	void *topology;
 	int topology_type;
 	
+	float *J;
+	
 	int **population_state;
 	float *fitness;
 
@@ -32,6 +34,8 @@ struct model {
 	int n_states;
 	
 	float mutation_inhibitor;
+	
+	float mu, sigma;
 };
 
 typedef struct model model_t;
@@ -54,5 +58,7 @@ void sort_population(model_t *m);
 void delete_model(model_t *m);
 
 void minimal_energies(model_t *template, int ***min_configs, int *n);
+
+float random01();
 
 #endif

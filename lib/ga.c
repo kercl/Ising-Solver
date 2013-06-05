@@ -9,6 +9,8 @@
 
 #define M_PI 3.14159265358979323846
 
+#define SQRT_PI 1.41421356237
+
 #define MIN(a,b) ( (a)<(b) ? (a) : (b) )
 #define MAX(a,b) ( (a)>(b) ? (a) c: (b) )
 
@@ -19,8 +21,8 @@ float random01() {
 	return ((float)(rand() & 0xFFFF) / 65536.0f);
 }
 
-double gaussrand() {
-	static double U, V;
+float gaussrand() {
+	static float U, V;
 	static int phase = 0;
 	double Z;
 
@@ -34,6 +36,10 @@ double gaussrand() {
 	phase = 1 - phase;
 
 	return Z;
+}
+
+float gauss(float x, float mu, float sigma) {
+	return (1/(2*SQRT_PI*sigma)) * exp(-0.5f * ((x-mu) / sigma)*((x-mu) / sigma));
 }
 
 /*****************************************************
@@ -79,6 +85,11 @@ void init_population(model_t *m, int tt, int population_size, int genomes, int *
 		m->population_state[i] = malloc(sizeof(int) * m->genomes);
 	
 	randomise_population(m);
+	
+	m->mu = 0;
+	m->sigma = 1;
+	
+	m->J = NULL;
 }
 
 /*****************************************************
@@ -193,14 +204,9 @@ void precalc_edge_list(model_t *m) {
 	}
 	
 	if(m->topology_type == MODEL_TYPE_GRAPH) {
-		
 		graph_t *l = m->topology;
+
 		
-		if(m->connection_list != NULL) {
-			free(m->connection_list);
-			m->connection_list = NULL;
-		}
-			
 		for(i = 0; i < m->genomes; ++i) {
 			graph_nearest_neighbours(l, i, m->radius_of_influence);
 			
@@ -218,10 +224,12 @@ void precalc_edge_list(model_t *m) {
 					edges++;
 			}
 		}
-		
+			
 		m->connections = 0;
+		
 		m->connection_list = malloc(edges * sizeof(edge_t));
 		unwrap_connections(m, stree);
+		
 		delete_tree(stree);
 	}
 }
@@ -300,6 +308,7 @@ void sort_population(model_t *m) {
 void evolve(model_t *m) {
 	if(m->connection_list == NULL)
 		precalc_edge_list(m);
+
 	if(m->connection_list == NULL)
 		return;
 	
@@ -312,7 +321,7 @@ void evolve(model_t *m) {
  * Simple energy in the Ising model:
  *     ___
  *    \
- * H = )   J   S  S
+ * H = )   J   S  S   Gauss(distance, mu, sigma)
  *    /___  ij  i  j
  *    <i,j>
  * 
@@ -325,7 +334,10 @@ float energy_ising(struct model *m, int i) {
 	int j;
 	
 	for(j = 0; j < m->connections; ++j)
-		H += J * m->population_state[i][m->connection_list[j].a] * m->population_state[i][m->connection_list[j].b];
+		H += (m->J ? m->J[j] : 1.0f) * 
+			m->population_state[i][m->connection_list[j].a] * 
+			m->population_state[i][m->connection_list[j].b] *
+			gauss(m->connection_list[j].distance - 1.0f, m->mu, m->sigma);
 	return H;
 }
 
