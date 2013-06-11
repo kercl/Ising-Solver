@@ -13,8 +13,8 @@
 #define HIGHLIGHT 80
 #define RADIUS 3.0f
 
-#define WIDTH 10
-#define HEIGHT 10
+#define WIDTH 8
+#define HEIGHT 8
 
 #define TYPE 0
 
@@ -77,6 +77,7 @@ void draw_grid(model_t *m, int psel) {
 		graph_t *l = (graph_t*)m->topology;
 		for(int i = 0; i < WIDTH * HEIGHT; ++i) {
 			graph_nearest_neighbours(l, i, 1.42f);
+			//getchar();
 			
 			if(l->last_nn_sz == 0)
 				continue;
@@ -186,9 +187,9 @@ int test_graph() {
 	init_graph(m.topology, WIDTH * HEIGHT);
 	
 	printf("building graph");
-	build_diamond_grid(m.topology, WIDTH, HEIGHT);
+	build_square_grid(m.topology, WIDTH, HEIGHT);
 	
-	//print_graph_connections(m.topology);
+	print_graph_connections(m.topology);
 	
 	draw_grid(&m, 0);
 

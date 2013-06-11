@@ -15,6 +15,7 @@ void init_graph(graph_t *ng, unsigned size) {
 	for(i = 0; i < size; ++i) {
 		ng->data[i].size_adj_list = 0;
 		ng->data[i].adj = NULL;
+		ng->data[i].dist = NULL;
 	}
 	
 	ng->last_nn = malloc((1 << MIN_SEARCH_STACK_SIZE) * sizeof(int));
@@ -56,8 +57,10 @@ void graph_nearest_neighbours(graph_t *g, int v, float radius) {
 	int size_search = 1, it_n = 0, i, j;
 	
 	searchbuffer[0].vertex = v;
+	searchbuffer[0].distance = 0.0f;
 	
 	while(size_search > 0) {
+		it_n = 0;
 		for(i = 0; i < size_search; ++i) {
 			for(j = 0; j < g->data[searchbuffer[i].vertex].size_adj_list; ++j) {
 				if(g->data[searchbuffer[i].vertex].adj[j] == v)
@@ -81,7 +84,6 @@ void graph_nearest_neighbours(graph_t *g, int v, float radius) {
 		searchbuffer = tmp;
 		
 		size_search = it_n;
-		it_n = 0;
 	}
 	
 	unwrap_tree(g, searchtree);

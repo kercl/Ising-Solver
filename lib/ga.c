@@ -39,7 +39,7 @@ float gaussrand() {
 }
 
 float gauss(float x, float mu, float sigma) {
-	return (1/(2*SQRT_PI*sigma)) * exp(-0.5f * ((x-mu) / sigma)*((x-mu) / sigma));
+	return exp(-0.5f * ((x-mu) / sigma)*((x-mu) / sigma));
 }
 
 /*****************************************************
@@ -477,6 +477,19 @@ int finished(model_t *m) {
 	return 1;
 }
 
+int state_id(model_t *m, uint8_t *state) {
+	int allele = 0;
+	
+	int res = 0;
+	int pow = 1;
+	
+	while(allele < m->genomes) {
+		res += state[allele] * pow;
+		pow <<= 1;
+		allele++;
+	}
+}
+
 void minimal_energies(model_t *template, int ***min_configs, int *n) {
 	model_t m;
 	init_population(&m, template->topology_type, 1, template->genomes, template->state_set, template->n_states);
@@ -491,12 +504,12 @@ void minimal_energies(model_t *template, int ***min_configs, int *n) {
 	
 	memset(state, 0, template->genomes * template->n_states);
 	
-	int k;
+	int k = 0;
 	while(!finished(&m)) {
 		nth_state_to_model(&m, state);
-		/*for(k = 0; k < m.genomes; ++k)
-			printf("%s", m.population_state[0][k] == -1 ? "-" : "+");
-		printf(" | %f\r", energy_ising(&m, 0));*/
+		printf("%d", k);
+		printf("\t%f\n", energy_ising(&m, 0));
 		inc_state(&m, state);
+		k++;
 	}
 }
